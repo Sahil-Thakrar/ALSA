@@ -13,13 +13,15 @@ void sigint(int sig)           //controlling the ctrl-c interrupt signal
 	if(err<0)
 	{
 		fprintf(stderr,"Unable to close the handle");
+		exit(EXIT_FAILURE);
 	}
 	err=fclose(file);
 	if(err<0)
 	{
 		fprintf(stderr,"Unable to close the file");
+		exit(EXIT_FAILURE);
 	}
-	exit(0);
+	exit(EXIT_SUCCESS);
 }
 
 int main(int argc,char **argv)
@@ -27,7 +29,7 @@ int main(int argc,char **argv)
 	if(argc!=5)
 	{
 		printf("Need arguments as \n1:Device Name \n2:Rate \n3:Channels \n4:output_file\n(as the command line arguments) \n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	unsigned int period_time=4000;//microseconds(4ms)
@@ -46,75 +48,84 @@ int main(int argc,char **argv)
 	if(NULL==file)
 	{
 		fprintf(stderr,"Can't open %s for writing\n",argv[1]);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_open(&capture_handle,device_name,SND_PCM_STREAM_CAPTURE,0);
 	if(err<0)
 	{
 		printf("ERROR: Can't open \"%s\" PCM device. %s\n",device_name,snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_malloc(&params);
 	if(err<0)
 	{
 		fprintf(stderr,"cannot allocate hardware parameter structure (%s)\n",snd_strerror(err));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_any(capture_handle, params);
 	if(err<0)
 	{
 		fprintf(stderr,"cannot allocate hardware parameter structure (%s)\n",snd_strerror(err));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_access(capture_handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
 	if(err< 0) 
 	{
 		printf("ERROR: Can't set interleaved mode. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_format(capture_handle, params,SND_PCM_FORMAT_S16_LE); 
 	if (err< 0) 
 	{
 		printf("ERROR: Can't set format. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_channels(capture_handle,params,channels); 
 	if (err< 0)
 	{
 		printf("ERROR: Can't set channels number. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_rate(capture_handle,params,rate,dir) ;
 	if (err<0)
 	{
 		printf("ERROR: Can't set rate. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_period_size(capture_handle,params,frames,dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set period size. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 		
 	err=snd_pcm_hw_params_set_periods_near(capture_handle,params,&periods,&dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set periods value. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_period_time_near(capture_handle,params,&period_time,&dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set period time. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params(capture_handle, params); 
 	if (err< 0)
 	{
 		printf("ERROR: Can't set harware parameters. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	printf("Audio is being recorded from %d Channels\n",channels);
@@ -126,9 +137,10 @@ int main(int argc,char **argv)
 	while(1)
 	{
 		read_data=snd_pcm_readi(capture_handle,buff,buff_size);
-		if (read_data== -EPIPE)
+		if (read_data == -EPIPE)
 		{
-			printf("Buffer is of small size\n");			
+			printf("Buffer is of small size\n");
+			exit(EXIT_FAILURE);			
 		}
 		else if(read_data<0)
 		{
