@@ -13,14 +13,16 @@ void sigint(int sig)           //controlling the ctrl-c interrupt signal
 	err=snd_pcm_drain(pcm_handle);
 	if(err<0)
 	{
-		fprintf(stderr,"Unable to drain all the data from the device");
+		fprintf(stderr,"Unable to drain all the data from the device");	
+		exit(EXIT_FAILURE);
 	}
 	err=snd_pcm_close(pcm_handle);
 	if(err<0)
 	{
 		fprintf(stderr,"Unable to close the device");
+		exit(EXIT_FAILURE);
 	}
-	exit(0);
+	exit(EXIT_SUCCESS);
 	
 }
 int main(int argc,char **argv)
@@ -28,7 +30,7 @@ int main(int argc,char **argv)
 	if(argc!=5)
 	{
 		printf("Need arguments as \n1:Device Name \n2:Rate \n3:Channels \n4:input_file\n(as the command line arguments) \n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	unsigned int period_time=4000;//microseconds(4ms)
@@ -44,25 +46,25 @@ int main(int argc,char **argv)
 	int dir;
 	int get_channels;
 	
-	//file=fopen(argv[4],"r");
 	int fd=open(argv[4],O_RDONLY,666);
-	//if(NULL==file)
-	//{
-	//	fprintf(stderr,"Can't open %s for reading\n",argv[2]);
-//		exit(1);
-//	}
+	if(fd<0)
+	{
+		fprintf(stderr,"Can't open %s for reading\n",argv[2]);
+		exit(EXIT_FAILURE);
+	}
 
 	err=snd_pcm_open(&pcm_handle,device_name,SND_PCM_STREAM_PLAYBACK,0);
 	if(err<0)
 	{
 		printf("ERROR: Can't open \"%s\" PCM device. %s\n",device_name,snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_malloc(&params);
 	if(err<0)
 	{
 		fprintf(stderr,"cannot allocate hardware parameter structure (%s)\n",snd_strerror(err));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	snd_pcm_hw_params_any(pcm_handle, params);
 	
@@ -70,48 +72,56 @@ int main(int argc,char **argv)
 	if(err< 0) 
 	{
 		printf("ERROR: Can't set interleaved mode. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_format(pcm_handle, params,SND_PCM_FORMAT_S16_LE); 
 	if (err< 0) 
 	{
 		printf("ERROR: Can't set format. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_channels(pcm_handle,params,channels);
 	if (err< 0)
 	{
 		printf("ERROR: Can't set channels number. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params_set_rate(pcm_handle,params,rate,dir) ;
 	if (err<0)
 	{
 		printf("ERROR: Can't set rate. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_period_size(pcm_handle,params,frames,dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set period size. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_periods_near(pcm_handle,params,&periods,&dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set periods value. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err=snd_pcm_hw_params_set_period_time_near(pcm_handle,params,&period_time,&dir);
 	if(err<0)
 	{
 		printf("ERROR: Can't set period time. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 	
 	err = snd_pcm_hw_params(pcm_handle, params); 
 	if (err< 0)
 	{
 		printf("ERROR: Can't set harware parameters. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
 	}
 
 	printf("PCM name: '%s'\n", snd_pcm_name(pcm_handle));
@@ -146,18 +156,20 @@ int main(int argc,char **argv)
 		if(err<0)
 		{
 			fprintf(stderr,"Reading from the buffer is failed");
+			exit(EXIT_FAILURE);
 		}
 		signal(SIGINT, sigint);
 		err = snd_pcm_writei(pcm_handle,buff,frames);
 		if (err == -EPIPE)
 		{
-			printf("Buffer is having Zero data.\n");
 			snd_pcm_prepare(pcm_handle);
+			printf("Buffer is having Zero data.\n");
 			
 		}
 		else if (err < 0)
 		{
 			printf("ERROR. Can't write to PCM device. %s\n", snd_strerror(err));
+			exit(EXIT_FAILURE);
 		}
 
 	}
