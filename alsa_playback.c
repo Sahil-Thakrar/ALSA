@@ -9,7 +9,6 @@ int err;
 
 void sigint(int sig)           //controlling the ctrl-c interrupt signal
 {
-	printf("\n\nFound the Ctrl + C Signal\nSo Terminating the program\n\n");
 	err=snd_pcm_drain(pcm_handle);
 	if(err<0)
 	{
@@ -22,6 +21,7 @@ void sigint(int sig)           //controlling the ctrl-c interrupt signal
 		fprintf(stderr,"Unable to close the device");
 		exit(EXIT_FAILURE);
 	}
+	printf("\n\nFound the Ctrl + C Signal\nSo Terminating the program\n\n");
 	exit(EXIT_SUCCESS);
 	
 }
@@ -34,17 +34,17 @@ int main(int argc,char **argv)
 	}
 
 	unsigned int period_time=4000;//microseconds(4ms)
-	snd_pcm_hw_params_t *params;
 	snd_pcm_uframes_t frames=192;
 	char *device_name=argv[1];
 	unsigned int rate = atoi(argv[2]);
 	unsigned int channels = atoi(argv[3]);
 	unsigned int buff_size=frames*channels*2;//sample size(16 bits(2bytes))
-	int buff[buff_size];
+	int buff[(2*buff_size)];
 	int periods=2;
 	int get_rate;
 	int dir;
 	int get_channels;
+	
 	
 	int fd=open(argv[4],O_RDONLY,666);
 	if(fd<0)
@@ -66,8 +66,8 @@ int main(int argc,char **argv)
 		fprintf(stderr,"cannot allocate hardware parameter structure (%s)\n",snd_strerror(err));
 		exit(EXIT_FAILURE);
 	}
+
 	snd_pcm_hw_params_any(pcm_handle, params);
-	
 	err=snd_pcm_hw_params_set_access(pcm_handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
 	if(err< 0) 
 	{
@@ -117,6 +117,7 @@ int main(int argc,char **argv)
 		exit(EXIT_FAILURE);
 	}
 	
+
 	err = snd_pcm_hw_params(pcm_handle, params); 
 	if (err< 0)
 	{
@@ -149,7 +150,12 @@ int main(int argc,char **argv)
 	printf("Periods %d\n",periods);	
 	
 	printf("Buffer size:- %d\n",buff_size);
-	
+	err=snd_pcm_start(pcm_handle);
+	if(err<0)
+	{
+		printf("ERROR: Can't start pcm. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
+	}
 	while(1)
 	{
 		err = read(fd,buff,buff_size);
@@ -158,7 +164,9 @@ int main(int argc,char **argv)
 			fprintf(stderr,"Reading from the buffer is failed");
 			exit(EXIT_FAILURE);
 		}
+		//printf("Read bytes are :- %d\n",err);
 		signal(SIGINT, sigint);
+
 		err = snd_pcm_writei(pcm_handle,buff,frames);
 		if (err == -EPIPE)
 		{
