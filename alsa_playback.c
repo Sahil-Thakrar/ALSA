@@ -2,30 +2,26 @@
 #include <stdio.h>
 #include <signal.h>
 
-FILE *file =NULL;
 snd_pcm_t *pcm_handle;
 snd_pcm_hw_params_t *params;
 int err;
+unsigned int period_time=4000;//microseconds(4ms)
+int periods=2;
+int get_rate;
+int dir;
+int get_channels;
+int read_data;
+int fd;
+snd_pcm_state_t state;
+char *position;
 
-void sigint(int sig)           //controlling the ctrl-c interrupt signal
-{
-	err=snd_pcm_drain(pcm_handle);
-	if(err<0)
-	{
-		fprintf(stderr,"Unable to drain all the data from the device");	
-		exit(EXIT_FAILURE);
-	}
-	err=snd_pcm_close(pcm_handle);
-	if(err<0)
-	{
-		fprintf(stderr,"Unable to close the device");
-		exit(EXIT_FAILURE);
-	}
-	printf("\n\nFound the Ctrl + C Signal\nSo Terminating the program\n\n");
-	exit(EXIT_SUCCESS);
-	
-}
-int main(int argc,char **argv)	
+void set_hw_params(snd_pcm_hw_params_t *,snd_pcm_uframes_t,unsigned int,unsigned int,unsigned int);
+void process_data(int,int [],unsigned int,snd_pcm_uframes_t);
+void status_check(snd_pcm_t *,snd_pcm_state_t,char *);
+void state_number_to_name();
+void sigint(int sig);           //controlling the ctrl-c interrupt signal
+
+int main(int argc,char **argv)
 {	
 	if(argc!=5)
 	{
@@ -33,35 +29,63 @@ int main(int argc,char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	unsigned int period_time=4000;//microseconds(4ms)
 	unsigned int rate = atoi(argv[2]);
 	snd_pcm_uframes_t frames=(rate*period_time)/1000000;
 	char *device_name=argv[1];
 	unsigned int channels = atoi(argv[3]);
 	unsigned int buff_size=frames*channels*2;//sample size(16 bits(2bytes))
 	int buff[(2*buff_size)];
-	int periods=2;
-	int get_rate;
-	int dir;
-	int get_channels;
-	int read_data;
-	snd_pcm_state_t state;
 	
-	
-	int fd=open(argv[4],O_RDONLY,666);
+	fd=open(argv[4],O_RDONLY,666);
 	if(fd<0)
 	{
 		fprintf(stderr,"Can't open %s for reading\n",argv[2]);
 		exit(EXIT_FAILURE);
 	}
-
 	err=snd_pcm_open(&pcm_handle,device_name,SND_PCM_STREAM_PLAYBACK,0);
 	if(err<0)
 	{
 		printf("ERROR: Can't open \"%s\" PCM device. %s\n",device_name,snd_strerror(err));
 		exit(EXIT_FAILURE);
-	}
-	
+	}	
+
+	while(1)
+	{
+		signal(SIGINT, sigint);
+		state=snd_pcm_state(pcm_handle);
+		switch(state)
+		{
+			case 0:
+				//state_number_to_name();
+			case 1:
+				set_hw_params(params,frames,rate,channels,buff_size);
+				break;
+			case 2:
+				position="before start";
+				//status_check(pcm_handle,state,position);	
+				err=snd_pcm_start(pcm_handle);
+				if(err<0)
+				{
+					printf("ERROR: Can't start pcm. %s\n", snd_strerror(err));
+					exit(EXIT_FAILURE);
+				}
+				position= "after start";
+				//status_check(pcm_handle,state,position);
+				break;
+			case 3:
+				process_data(fd,buff,buff_size,frames);
+				break;
+			case 4:
+				err = EPIPE;
+				snd_pcm_prepare(pcm_handle);
+				printf("Buffer is having Zero data.\n");
+				break;
+		}
+	}		
+}
+
+void set_hw_params(snd_pcm_hw_params_t *params,snd_pcm_uframes_t frames,unsigned int rate,unsigned int channels,unsigned int buff_size)
+{
 	err=snd_pcm_hw_params_malloc(&params);
 	if(err<0)
 	{
@@ -146,69 +170,110 @@ int main(int argc,char **argv)
 
 	printf("Frames :- %ld\n",frames);
 	printf("Buffer size :- %d\n",buff_size);
+}
 
-	state = snd_pcm_state(pcm_handle);
-	//printf("State before start %s\n",snd_pcm_state_name(state));
-	
-	err=snd_pcm_start(pcm_handle);
+void sigint(int sig)           //controlling the ctrl-c interrupt signal
+{
+	err=snd_pcm_drain(pcm_handle);
 	if(err<0)
 	{
-		printf("ERROR: Can't start pcm. %s\n", snd_strerror(err));
+		fprintf(stderr,"Unable to drain all the data from the device");	
 		exit(EXIT_FAILURE);
 	}
-	
-	state = snd_pcm_state(pcm_handle);
-	//printf("State after start call %s\n",snd_pcm_state_name(state));
-	
-	while(1)
+	err=snd_pcm_close(pcm_handle);
+	if(err<0)
 	{
-		read_data = read(fd,buff,buff_size);
+		fprintf(stderr,"Unable to close the device");
+		exit(EXIT_FAILURE);
+	}
+	printf("\n\nFound the Ctrl + C Signal\nSo Terminating the program\n\n");
+	exit(EXIT_SUCCESS);	
+}
+
+void process_data(int fd,int buff[],unsigned int buff_size,snd_pcm_uframes_t frames)
+{
+	read_data = read(fd,buff,buff_size);
+	if(err<0)
+	{
+		fprintf(stderr,"Reading from the buffer is failed");
+		exit(EXIT_FAILURE);
+	}
+	position="before writei";
+	//status_check(pcm_handle,state,position);
+	err = snd_pcm_writei(pcm_handle,buff,frames);
+	if (err == -EPIPE)
+	{
+		snd_pcm_prepare(pcm_handle);
+		printf("Buffer is having Zero data.\n");
+	}
+	if (err < 0)
+	{
+		printf("ERROR. Can't write to PCM device. %s\n", snd_strerror(err));
+		exit(EXIT_FAILURE);
+	}
+	position="after writei";
+	//status_check(pcm_handle,state,position);
+
+	if(0==read_data)
+	{
+		printf("Audio is played completely...!\n\n");
+		err=snd_pcm_close(pcm_handle);
 		if(err<0)
 		{
-			fprintf(stderr,"Reading from the buffer is failed");
+			fprintf(stderr,"Unable to close the device");
 			exit(EXIT_FAILURE);
 		}
-		signal(SIGINT, sigint);
-		state = snd_pcm_state(pcm_handle);
-		//printf("State before writei %s\n",snd_pcm_state_name(state));
-		err = snd_pcm_writei(pcm_handle,buff,frames);
-		if (err == -EPIPE)
-		{
-			snd_pcm_prepare(pcm_handle);
-			printf("Buffer is having Zero data.\n");
-		}
-
-		if (err < 0)
-		{
-			printf("ERROR. Can't write to PCM device. %s\n", snd_strerror(err));
-			exit(EXIT_FAILURE);
-		}
-		state = snd_pcm_state(pcm_handle);
-		//printf("State after writei %s\n",snd_pcm_state_name(state));
-		
-		if(0==read_data)
-		{
-			printf("Audio is played completely...!\n\n");
-			err=snd_pcm_close(pcm_handle);
-			if(err<0)
-			{
-				fprintf(stderr,"Unable to close the device");
-				exit(EXIT_FAILURE);
-			}
-			exit(EXIT_SUCCESS);
-		}
+		exit(EXIT_SUCCESS);
 	}
 }
 
-// switch(pcm_handle)
-// {
-// case 'OPEN' :
-// case 'SETUP' :
-// case 'PREPARED' : snd_pcm_start(pcm_handlle)
-// case 'RUNNING' : 
-// case 'XRUN' : err = EPIPE;
-// case 'DRAINING' : 
-// case 'PAUSED' : break;
-// case 'SUSPENDED' : err = ESTRPIPE;
-// case 'DISCONNECTED':
-// }
+void status_check(snd_pcm_t *pcm_handle,snd_pcm_state_t state,char *place)
+{
+	state = snd_pcm_state(pcm_handle);
+	printf("State %s %s\n",place,snd_pcm_state_name(state));
+}
+
+void state_number_to_name()
+{
+
+	printf("State 0 %s \n",snd_pcm_state_name(0));
+	printf("State 1 %s \n",snd_pcm_state_name(1));
+	printf("State 2 %s \n",snd_pcm_state_name(2));
+	printf("State 3 %s \n",snd_pcm_state_name(3));
+	printf("State 4 %s \n",snd_pcm_state_name(4));
+	printf("State 5 %s \n",snd_pcm_state_name(5));
+	printf("State 6 %s \n",snd_pcm_state_name(6));
+	printf("State 7 %s \n",snd_pcm_state_name(7));
+	printf("State 8 %s \n\n",snd_pcm_state_name(8));
+}
+
+//with If statements 
+
+// state=snd_pcm_state(pcm_handle);
+	// if(state==0||state==1)
+	// {
+ 		
+	// 	printf("OPEN\n");
+	// 	set_hw_params(params,frames,rate,channels,buff_size);
+	// }	
+
+	// state=snd_pcm_state(pcm_handle);
+	// if(state==2)
+	// { 
+	// 	position="before start";
+	// 	//status_check(pcm_handle,state,position);	
+	// 	err=snd_pcm_start(pcm_handle);
+	// 	if(err<0)
+	// 	{
+	// 		printf("ERROR: Can't start pcm. %s\n", snd_strerror(err));
+	// 		exit(EXIT_FAILURE);
+	// 	}
+	// 	position= "after start";
+	// 	//status_check(pcm_handle,state,position);
+	// }
+	// if(state==3)
+	// {
+	// 	err = EPIPE;
+	// 	snd_pcm_prepare(pcm_handle);
+	// 	printf("Buffer is having Zero data.\n");
+	// }
