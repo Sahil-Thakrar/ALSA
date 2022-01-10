@@ -16,7 +16,7 @@ snd_pcm_state_t state;
 char *position;
 
 void set_hw_params(snd_pcm_hw_params_t *,snd_pcm_uframes_t,unsigned int,unsigned int,unsigned int);
-void process_data(int,int [],unsigned int,snd_pcm_uframes_t);
+void process_data(int,void *,size_t,snd_pcm_uframes_t);
 void status_check(snd_pcm_t *,snd_pcm_state_t,char *);
 void state_number_to_name();
 void sigint(int sig);           //controlling the ctrl-c interrupt signal
@@ -29,12 +29,13 @@ int main(int argc,char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	signal(SIGINT, sigint);	
 	unsigned int rate = atoi(argv[2]);
 	snd_pcm_uframes_t frames=(rate*period_time)/1000000;
 	char *device_name=argv[1];
 	unsigned int channels = atoi(argv[3]);
 	unsigned int buff_size=frames*channels*2;//sample size(16 bits(2bytes))
-	int buff[(2*buff_size)];
+	int buff[(buff_size)/2];//for double byte size buffer
 	
 	fd=open(argv[4],O_RDONLY,666);
 	if(fd<0)
@@ -51,12 +52,12 @@ int main(int argc,char **argv)
 
 	while(1)
 	{
-		signal(SIGINT, sigint);
+		
 		state=snd_pcm_state(pcm_handle);
 		switch(state)
 		{
 			case 0:
-				//State = OPEN
+				//State is OPEN
 				//state_number_to_name();
 			case 1:
 				//State = SETUP
@@ -197,7 +198,7 @@ void sigint(int sig)           //controlling the ctrl-c interrupt signal
 	exit(EXIT_SUCCESS);	
 }
 
-void process_data(int fd,int buff[],unsigned int buff_size,snd_pcm_uframes_t frames)
+void process_data(int fd,void *buff,size_t buff_size,snd_pcm_uframes_t frames)
 {
 	read_data = read(fd,buff,buff_size);
 	if(err<0)
