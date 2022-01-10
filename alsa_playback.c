@@ -56,11 +56,14 @@ int main(int argc,char **argv)
 		switch(state)
 		{
 			case 0:
+				//State = OPEN
 				//state_number_to_name();
 			case 1:
+				//State = SETUP
 				set_hw_params(params,frames,rate,channels,buff_size);
 				break;
 			case 2:
+				//State = PREPARED
 				position="before start";
 				//status_check(pcm_handle,state,position);	
 				err=snd_pcm_start(pcm_handle);
@@ -73,13 +76,17 @@ int main(int argc,char **argv)
 				//status_check(pcm_handle,state,position);
 				break;
 			case 3:
+				//State = RUNNING
 				process_data(fd,buff,buff_size,frames);
 				break;
 			case 4:
+				//State = XRUN
 				err = EPIPE;
 				snd_pcm_prepare(pcm_handle);
 				printf("Buffer is having Zero data.\n");
 				break;
+			default:
+				printf("What has to be done when this STATE (%s) arrives is not know \n",snd_pcm_state_name(state));
 		}
 	}		
 }
