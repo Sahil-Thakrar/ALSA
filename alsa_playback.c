@@ -195,7 +195,7 @@ void sigint(int sig)           //controlling the ctrl-c interrupt signal
 void process_data(int fd,void *buff,size_t buff_size,snd_pcm_uframes_t frames)
 {
 	read_data = read(fd,buff,buff_size);
-	if(err<0)
+	if(read_data<0)
 	{
 		fprintf(stderr,"Reading from the buffer is failed");
 		exit(EXIT_FAILURE);
