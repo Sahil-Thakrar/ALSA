@@ -53,17 +53,16 @@ int main(int argc,char **argv)
 	while(1)
 	{
 		
-		state=snd_pcm_state(pcm_handle);
-		switch(state)
+		switch(snd_pcm_state(pcm_handle))
 		{
-			case 0:
+			case SND_PCM_STATE_OPEN:
 				//State is OPEN
 				//state_number_to_name();
-			case 1:
+			case SND_PCM_STATE_SETUP:
 				//State = SETUP
 				set_hw_params(params,frames,rate,channels,buff_size);
 				break;
-			case 2:
+			case SND_PCM_STATE_PREPARED:
 				//State is PREPARED
 				position="before start";
 				//status_check(pcm_handle,state,position);	
@@ -76,7 +75,7 @@ int main(int argc,char **argv)
 				position= "after start";
 				//status_check(pcm_handle,state,position);
 				break;
-			case 3:
+			case SND_PCM_STATE_RUNNING:
 				//State is RUNNING
 				process_data(fd,buff,buff_size,frames);
 				break;
